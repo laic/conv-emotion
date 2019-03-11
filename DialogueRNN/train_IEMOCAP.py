@@ -177,7 +177,7 @@ if __name__ == '__main__':
                            weight_decay=args.l2)
 
     train_loader, valid_loader, test_loader =\
-            get_IEMOCAP_loaders('./IEMOCAP_features/IEMOCAP_features_raw.pkl',
+            get_IEMOCAP_loaders('./DialogueRNN_features/IEMOCAP_features/IEMOCAP_features_raw.pkl',
                                 valid=0.0,
                                 batch_size=batch_size,
                                 num_workers=2)

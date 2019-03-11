@@ -56,16 +56,22 @@ def train_or_eval_model(model, loss_function, dataloader, epoch, optimizer=None,
     labels = []
     masks = []
     assert not train or optimizer!=None
+
     if train:
+        print("train")
         model.train()
     else:
+        print("Eval")
         model.eval()
+    
     for data in dataloader:
         if train:
             optimizer.zero_grad()
         textf, visuf, acouf, qmask, umask, label =\
                                 [d.cuda() for d in data] if cuda else data
-        pred = model(textf, qmask) # batch*seq_len
+
+        ## Only uses text features
+        pred = model(textf, qmask)  # batch*seq_len
         labels_ = label.view(-1) # batch*seq_len
         umask_ = umask.view(-1) # batch*seq_len
         loss = loss_function(pred, labels_, umask_)
@@ -158,13 +164,19 @@ if __name__ == '__main__':
                            lr=args.lr,
                            weight_decay=args.l2)
 
+    print(args.attribute)
     train_loader, valid_loader, test_loader =\
-            get_AVEC_loaders('./AVEC_features/AVEC_features_{}.pkl'.format(args.attribute),
+            get_AVEC_loaders('./DialogueRNN_features/AVEC_features/AVEC_features_{}.pkl'.format(args.attribute),
                                 valid=0.0,
                                 batch_size=batch_size,
                                 num_workers=2)
 
     best_loss, best_label, best_pred, best_mask, best_pear = None, None, None, None, None
+
+    ## This is doing early stopping on test, not dev?
+    ## Also there's not model saving etc
+    ## Check that it's using eval mode?
+
 
     for e in range(n_epochs):
         start_time = time.time()
