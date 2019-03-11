@@ -43,7 +43,6 @@ class AVECDataset(Dataset):
             self.trainVid, self.testVid = pickle.load(open(path, 'rb'),encoding='latin1')
 
         self.keys = [x for x in (self.trainVid if train else self.testVid)]
-
         self.len = len(self.keys)
 
     def __getitem__(self, index):
@@ -60,8 +59,10 @@ class AVECDataset(Dataset):
         return self.len
 
     def collate_fn(self, data):
+        #print("collate_fn")
         dat = pd.DataFrame(data)
         return [pad_sequence(dat[i]) if i<4 else pad_sequence(dat[i], True) for i in dat]
+
 class MELDDataset(Dataset):
 
     def __init__(self, path, train=True):
