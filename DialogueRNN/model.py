@@ -505,43 +505,6 @@ class Model(nn.Module):
         log_prob = F.log_softmax(self.smax_fc(hidden), 2) # seq_len, batch, n_classes
         return log_prob
 
-class CallHomeModel(nn.Module):
-
-    def __init__(self, D_m, D_g, D_p, D_e, D_h, attr, listener_state=False,
-            context_attention='simple', D_a=100, dropout_rec=0.5, dropout=0.5):
-        super(CallHomeModel, self).__init__()
-
-        self.D_m         = D_m
-        self.D_g         = D_g
-        self.D_p         = D_p
-        self.D_e         = D_e
-        self.D_h         = D_h
-        self.attr        = attr
-        self.dropout     = nn.Dropout(dropout)
-        self.dropout_rec = nn.Dropout(dropout)
-
-        self.dialog_rnn  = DialogueRNN(D_m, D_g, D_p, D_e,listener_state,
-                                    context_attention, D_a, dropout_rec)
-
-        self.linear      = nn.Linear(D_e, D_h)
-        self.smax_fc     = nn.Linear(D_h, 1)
-
-    def forward(self, U, qmask):
-        """
-        U -> seq_len, batch, D_m
-        qmask -> seq_len, batch, party
-        """
-
-        emotions,_ = self.dialog_rnn(U, qmask) # seq_len, batch, D_e
-        emotions = self.dropout_rec(emotions)
-        hidden = torch.tanh(self.linear(emotions))
-        hidden = self.dropout(hidden)
-        if self.attr!=4:
-            pred = (self.smax_fc(hidden).squeeze()) # seq_len, batch
-        else:
-            pred = (self.smax_fc(hidden).squeeze()) # seq_len, batch
-        return pred.transpose(0,1).contiguous().view(-1)
-
 
 class AVECModel(nn.Module):
 
