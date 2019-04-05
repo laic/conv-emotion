@@ -186,28 +186,6 @@ class AVECDataset(Dataset):
             self.videoAudio, self.videoVisual, self.videoSentence,\
             self.trainVid, self.testVid = pickle.load(open(path, 'rb'),encoding='latin1')
 
-
-        #print(self.videoAudio[2][0])
-        print(self.videoAudio[2][0].shape)
-        print(len(self.videoAudio))
-        #for k, v in self.videoAudio.items():
-        #        print(k, len(v))
-
-
-        print (len(self.trainVid))
-        print (len(self.testVid))
-
-        print(type(self.videoSpeakers))
-
-        print(self.videoSpeakers[2])
-        print(type(self.videoSpeakers[2]))
-        print(self.videoLabels[2])
-        print(type(self.videoLabels[2]))
-        print(type(self.videoAudio[2]))
-        print(type(self.videoAudio[2][0]))
-        print(type(self.videoText[2]))
-        print(type(self.videoText[2][0]))
-
         self.keys = [x for x in (self.trainVid if train else self.testVid)]
         self.len = len(self.keys)
 
