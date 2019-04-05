@@ -25,6 +25,8 @@ def get_train_valid_sampler(trainset, valid=0.1):
 
 def get_IEMOCAP_loaders(path, batch_size=32, valid=0.1, num_workers=0, pin_memory=False):
     trainset = IEMOCAPDataset(path=path)
+    print(trainset[3])
+    raise SystemExit
     train_sampler, valid_sampler = get_train_valid_sampler(trainset, valid)
     train_loader = DataLoader(trainset,
                               batch_size=batch_size,

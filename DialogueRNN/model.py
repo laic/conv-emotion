@@ -45,6 +45,9 @@ class MatchingAttention(nn.Module):
         x -> (batch, cand_dim)
         mask -> (batch, seq_len)
         """
+
+        mask_ = mask.transpose(0,1) 
+
         if type(mask)==type(None):
             mask = torch.ones(M.size(1), M.size(0)).type(M.type())
 
@@ -53,16 +56,22 @@ class MatchingAttention(nn.Module):
             M_ = M.permute(1,2,0) # batch, vector, seqlen
             x_ = x.unsqueeze(1) # batch, 1, vector
             alpha = F.softmax(torch.bmm(x_, M_), dim=2) # batch, 1, seqlen
+
         elif self.att_type=='general':
             M_ = M.permute(1,2,0) # batch, mem_dim, seqlen
             x_ = self.transform(x).unsqueeze(1) # batch, 1, mem_dim
             alpha = F.softmax(torch.bmm(x_, M_), dim=2) # batch, 1, seqlen
+
         elif self.att_type=='general2':
+
             M_ = M.permute(1,2,0) # batch, mem_dim, seqlen
             x_ = self.transform(x).unsqueeze(1) # batch, 1, mem_dim
-            alpha_ = F.softmax((torch.bmm(x_, M_))*mask.unsqueeze(1), dim=2) # batch, 1, seqlen
-            alpha_masked = alpha_*mask.unsqueeze(1) # batch, 1, seqlen
+            tbmm = torch.bmm(x_,M_)
+
+            alpha_ = F.softmax((torch.bmm(x_, M_))*mask_.unsqueeze(1), dim=2) # batch, 1, seqlen
+            alpha_masked = alpha_*mask_.unsqueeze(1) # batch, 1, seqlen
             alpha_sum = torch.sum(alpha_masked, dim=2, keepdim=True) # batch, 1, 1
+
             alpha = alpha_masked/alpha_sum # batch, 1, 1 ; normalized
             #import ipdb;ipdb.set_trace()
         else:
@@ -73,7 +82,6 @@ class MatchingAttention(nn.Module):
             alpha = F.softmax(self.vector_prod(mx_a),1).transpose(1,2) # batch, 1, seqlen
 
         attn_pool = torch.bmm(alpha, M.transpose(0,1))[:,0,:] # batch, mem_dim
-
         return attn_pool, alpha
 
 
@@ -128,7 +136,7 @@ class DialogueRNNCell(nn.Module):
                 torch.zeros(U.size()[0],self.D_g).type(U.type()) if g_hist.size()[0]==0 else
                 g_hist[-1])
 
-        print(q0.shape)
+        #print(q0.shape)
 
         ## Apply dropout
         g_ = self.dropout(g_)
@@ -216,7 +224,7 @@ class DialogueRNN(nn.Module):
 class BiModel(nn.Module):
 
     def __init__(self, D_m, D_g, D_p, D_e, D_h,
-                 n_classes=7, listener_state=False, context_attention='simple', D_a=100, dropout_rec=0.5,
+                 n_classes=2, listener_state=False, context_attention='simple', D_a=100, dropout_rec=0.5,
                  dropout=0.5):
         super(BiModel, self).__init__()
 
@@ -240,37 +248,49 @@ class BiModel(nn.Module):
         """
         X -> seq_len, batch, dim
         mask -> batch, seq_len
+        
         """
+        #print("REVERSE")
+        #print(mask)
+        #print(X.shape, mask.shape)
         X_ = X.transpose(0,1)
-        mask_sum = torch.sum(mask, 1).int()
+        #print(X_.shape)
+        mask_sum = torch.sum(mask, 0).int()
+        #print(mask_sum)
 
         xfs = []
         for x, c in zip(X_, mask_sum):
+        #    print(x.shape, c)
             xf = torch.flip(x[:c], [0])
             xfs.append(xf)
 
         return pad_sequence(xfs)
 
 
-    def forward(self, U, qmask, umask,att2=True):
+    def forward(self, U, qmask, umask, att2=True):
         """
         U -> seq_len, batch, D_m
         qmask -> seq_len, batch, party
         """
-
         emotions_f, alpha_f = self.dialog_rnn_f(U, qmask) # seq_len, batch, D_e
+
+
         emotions_f = self.dropout_rec(emotions_f)
         rev_U = self._reverse_seq(U, umask)
         rev_qmask = self._reverse_seq(qmask, umask)
+
         emotions_b, alpha_b = self.dialog_rnn_r(rev_U, rev_qmask)
         emotions_b = self._reverse_seq(emotions_b, umask)
         emotions_b = self.dropout_rec(emotions_b)
+
         emotions = torch.cat([emotions_f,emotions_b],dim=-1)
+
         if att2:
             att_emotions = []
             alpha = []
             for t in emotions:
                 att_em, alpha_ = self.matchatt(emotions,t,mask=umask)
+
                 att_emotions.append(att_em.unsqueeze(0))
                 alpha.append(alpha_[:,0,:])
             att_emotions = torch.cat(att_emotions,dim=0)
@@ -485,6 +505,44 @@ class Model(nn.Module):
         log_prob = F.log_softmax(self.smax_fc(hidden), 2) # seq_len, batch, n_classes
         return log_prob
 
+class CallHomeModel(nn.Module):
+
+    def __init__(self, D_m, D_g, D_p, D_e, D_h, attr, listener_state=False,
+            context_attention='simple', D_a=100, dropout_rec=0.5, dropout=0.5):
+        super(CallHomeModel, self).__init__()
+
+        self.D_m         = D_m
+        self.D_g         = D_g
+        self.D_p         = D_p
+        self.D_e         = D_e
+        self.D_h         = D_h
+        self.attr        = attr
+        self.dropout     = nn.Dropout(dropout)
+        self.dropout_rec = nn.Dropout(dropout)
+
+        self.dialog_rnn  = DialogueRNN(D_m, D_g, D_p, D_e,listener_state,
+                                    context_attention, D_a, dropout_rec)
+
+        self.linear      = nn.Linear(D_e, D_h)
+        self.smax_fc     = nn.Linear(D_h, 1)
+
+    def forward(self, U, qmask):
+        """
+        U -> seq_len, batch, D_m
+        qmask -> seq_len, batch, party
+        """
+
+        emotions,_ = self.dialog_rnn(U, qmask) # seq_len, batch, D_e
+        emotions = self.dropout_rec(emotions)
+        hidden = torch.tanh(self.linear(emotions))
+        hidden = self.dropout(hidden)
+        if self.attr!=4:
+            pred = (self.smax_fc(hidden).squeeze()) # seq_len, batch
+        else:
+            pred = (self.smax_fc(hidden).squeeze()) # seq_len, batch
+        return pred.transpose(0,1).contiguous().view(-1)
+
+
 class AVECModel(nn.Module):
 
     def __init__(self, D_m, D_g, D_p, D_e, D_h, attr, listener_state=False,
@@ -499,8 +557,10 @@ class AVECModel(nn.Module):
         self.attr        = attr
         self.dropout     = nn.Dropout(dropout)
         self.dropout_rec = nn.Dropout(dropout)
+
         self.dialog_rnn  = DialogueRNN(D_m, D_g, D_p, D_e,listener_state,
                                     context_attention, D_a, dropout_rec)
+
         self.linear      = nn.Linear(D_e, D_h)
         self.smax_fc     = nn.Linear(D_h, 1)
 
@@ -534,7 +594,14 @@ class MaskedNLLLoss(nn.Module):
         target -> batch*seq_len
         mask -> batch, seq_len
         """
+#        print("MaskedNLLLoss") 
+#        print(pred.shape, target.shape, mask.shape)
+
+        #print(mask) 
         mask_ = mask.view(-1,1) # batch*seq_len, 1
+        #print(mask_)
+#        print(mask_.shape)
+
         if type(self.weight)==type(None):
             loss = self.loss(pred*mask_, target)/torch.sum(mask)
         else:

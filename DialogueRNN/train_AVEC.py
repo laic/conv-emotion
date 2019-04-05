@@ -27,6 +27,8 @@ def get_train_valid_sampler(trainset, valid=0.1):
 
 def get_AVEC_loaders(path, batch_size=32, valid=0.1, num_workers=0, pin_memory=False):
     trainset = AVECDataset(path=path)
+#    print(trainset[3])
+
     train_sampler, valid_sampler = get_train_valid_sampler(trainset, valid)
     train_loader = DataLoader(trainset,
                               batch_size=batch_size,
