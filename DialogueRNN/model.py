@@ -136,11 +136,6 @@ class DialogueRNNCell(nn.Module):
                 torch.zeros(U.size()[0],self.D_g).type(U.type()) if g_hist.size()[0]==0 else
                 g_hist[-1])
 
-<<<<<<< HEAD
-        #print(q0.shape)
-=======
-        print(q0.shape)
->>>>>>> a65a6afd34aa89ae47651acdf5f2ddb52c0f3dee
 
         ## Apply dropout
         g_ = self.dropout(g_)
